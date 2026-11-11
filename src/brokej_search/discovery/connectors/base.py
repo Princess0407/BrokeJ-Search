@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from brokej_search.core.exceptions import ConnectorError, ConnectorSchemaError
+from brokej_search.core.http import retry_after_seconds
 from brokej_search.discovery.schemas import ConnectorPage
 
 
@@ -57,11 +58,9 @@ class JobConnector(ABC):
                         f"Temporary provider response: HTTP {response.status_code}"
                     )
                 retry_after = response.headers.get("Retry-After")
-                delay = (
-                    float(retry_after)
-                    if retry_after and retry_after.isdigit()
-                    else base_delay * (2**attempt)
-                )
+                delay = retry_after_seconds(retry_after)
+                if delay is None:
+                    delay = base_delay * (2**attempt)
                 await self.sleep(min(delay, 60))
                 continue
             if response.status_code >= 400:

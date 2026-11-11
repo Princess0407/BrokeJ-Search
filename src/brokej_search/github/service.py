@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from brokej_search.core.exceptions import NotFoundError
+from brokej_search.core.exceptions import ConnectorError, NotFoundError
 from brokej_search.database.models import (
     Candidate,
     ClaimReconciliation,
@@ -234,10 +234,20 @@ class GitHubService:
             params={"type": "owner", "sort": "updated", "direction": "desc"},
             max_items=100,
         )
-        analyzed = [
-            await self._inspect_repository(repo) for repo in repos if not repo.get("private")
-        ]
-        contributions = await self._contributions(username)
+        analyzed = []
+        failures = 0
+        for repo in repos:
+            if repo.get("private"):
+                continue
+            try:
+                analyzed.append(await self._inspect_repository(repo))
+            except ConnectorError:
+                failures += 1
+        try:
+            contributions = await self._contributions(username)
+        except ConnectorError:
+            contributions = []
+            failures += 1
         now = utcnow()
         with self.factory.begin() as session:
             profile = session.get(GitHubProfile, profile_id)
@@ -246,7 +256,8 @@ class GitHubService:
                 profile.github_user_id = user.get("id")
             profile.etag = user_headers.get("etag", profile.etag)
             profile.last_checked_at = now
-            profile.last_successful_sync_at = now
+            if failures == 0:
+                profile.last_successful_sync_at = now
             for repo, analysis in analyzed:
                 row = session.scalar(
                     select(GitHubRepository).where(
@@ -272,6 +283,7 @@ class GitHubService:
                 row.repository_metadata = {
                     "size": repo.get("size"),
                     "visibility": repo.get("visibility", "public"),
+                    "available": True,
                 }
                 row.repository_updated_at = parse_datetime(repo.get("updated_at"))
                 row.checked_at = now
@@ -298,8 +310,15 @@ class GitHubService:
                         GitHubContribution.api_url == item["api_url"],
                     )
                 )
-                if not contribution_existing:
-                    metadata = item.pop("metadata")
+                metadata = item.pop("metadata")
+                if contribution_existing:
+                    contribution_existing.repository_full_name = item["repository_full_name"]
+                    contribution_existing.html_url = item["html_url"]
+                    contribution_existing.state = item["state"]
+                    contribution_existing.attribution_status = item["attribution_status"]
+                    contribution_existing.occurred_at = item["occurred_at"]
+                    contribution_existing.contribution_metadata = metadata
+                else:
                     session.add(
                         GitHubContribution(
                             github_profile_id=profile.id,
@@ -309,9 +328,10 @@ class GitHubService:
                     )
         self.reconcile_claims(candidate_id)
         return {
-            "status": "synchronized",
+            "status": "synchronized" if failures == 0 else "partial",
             "repositories": len(analyzed),
             "contributions": len(contributions),
+            "failures": failures,
         }
 
     async def _inspect_repository(
@@ -355,10 +375,10 @@ class GitHubService:
             ("issue", f"author:{username} type:issue"),
             ("review", f"reviewed-by:{username} type:pr"),
         ):
-            payload, _ = await client.get_json(
-                "/search/issues", params={"q": query, "per_page": 30}
+            items = await client.paginated_search(
+                "/search/issues", params={"q": query}, max_items=90
             )
-            for item in payload.get("items", []) if isinstance(payload, dict) else []:
+            for item in items:
                 if not isinstance(item, dict) or not item.get("url"):
                     continue
                 output.append(

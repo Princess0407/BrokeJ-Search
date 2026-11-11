@@ -12,6 +12,7 @@ from brokej_search.core.exceptions import (
     ConnectorSchemaError,
     GitHubRateLimitError,
 )
+from brokej_search.core.http import retry_after_seconds
 
 
 class GitHubClient:
@@ -56,20 +57,24 @@ class GitHubClient:
                 continue
             if response.status_code == 304:
                 return None, response.headers
-            if response.status_code == 403 and response.headers.get("x-ratelimit-remaining") == "0":
-                raise GitHubRateLimitError(
-                    "GitHub rate limit reached; "
-                    f"reset={response.headers.get('x-ratelimit-reset', 'unknown')}"
-                )
+            if response.status_code == 403:
+                if response.headers.get("x-ratelimit-remaining") == "0":
+                    raise GitHubRateLimitError(
+                        "GitHub rate limit reached; "
+                        f"reset={response.headers.get('x-ratelimit-reset', 'unknown')}"
+                    )
+                retry_after = retry_after_seconds(response.headers.get("retry-after"))
+                if retry_after is not None:
+                    if attempt + 1 == self.max_attempts:
+                        raise ConnectorError("GitHub secondary rate limit retry exhausted")
+                    await self.sleep(retry_after)
+                    continue
             if response.status_code in {408, 429, 500, 502, 503, 504}:
                 if attempt + 1 == self.max_attempts:
                     raise ConnectorError(f"Temporary GitHub response: HTTP {response.status_code}")
-                retry_after = response.headers.get("retry-after")
-                delay = (
-                    float(retry_after)
-                    if retry_after and retry_after.isdigit()
-                    else 0.2 * (2**attempt)
-                )
+                delay = retry_after_seconds(response.headers.get("retry-after"))
+                if delay is None:
+                    delay = 0.2 * (2**attempt)
                 await self.sleep(min(delay, 60))
                 continue
             if response.status_code == 404:
@@ -94,9 +99,31 @@ class GitHubClient:
                 break
             if not isinstance(payload, list):
                 raise ConnectorSchemaError("Expected a paginated GitHub list")
-            items.extend(item for item in payload if isinstance(item, dict))
+            if any(not isinstance(item, dict) for item in payload):
+                raise ConnectorSchemaError("GitHub list item must be an object")
+            items.extend(payload)
             next_url = response_next(headers)
             url = next_url
+            query = None
+        return items[:max_items]
+
+    async def paginated_search(
+        self, path: str, *, params: dict[str, Any], max_items: int = 90
+    ) -> list[dict[str, Any]]:
+        url: str | None = path
+        query: dict[str, Any] | None = {
+            "per_page": min(max_items, 100),
+            **params,
+        }
+        items: list[dict[str, Any]] = []
+        while url and len(items) < max_items:
+            payload, headers = await self.get_json(url, params=query)
+            if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+                raise ConnectorSchemaError("Expected a GitHub search result with an items list")
+            if any(not isinstance(item, dict) for item in payload["items"]):
+                raise ConnectorSchemaError("GitHub search item must be an object")
+            items.extend(payload["items"])
+            url = response_next(headers)
             query = None
         return items[:max_items]
 

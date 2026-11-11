@@ -1,7 +1,24 @@
-# Milestones 1–3 implementation report
+# Milestones 1–4 implementation report
 
-Status: Milestone 3 implemented and fixture-tested locally
-Date: 2026-11-11
+Status: Milestone 4 integration and reliability foundations implemented
+Date: 2026-11-12
+
+## Milestone 4 delivered
+
+- FastAPI integration tests now issue HTTP requests through `httpx.ASGITransport`; they cover routing, method and payload validation, response serialization, error mapping, unexpected 500 responses, and state persistence. This avoids the observed Python 3.14 synchronous `TestClient` hang.
+- ATS contract tests cover empty and malformed payloads, schema drift, 429/503 retry behavior, Retry-After, and bounded timeout retry exhaustion. Retry-After seconds and HTTP dates share a parser, clamped at 60 seconds.
+- GitHub search pagination now follows Link headers. Secondary rate limits retry within configured bounds. Repository inspection failures are isolated; successful evidence is retained, partial results are reported, and a partial run does not advance the successful-sync timestamp. Existing contribution records refresh on sync.
+- An optional `postgres-test` dependency group and environment-gated PostgreSQL test verify schema migration upgrade/downgrade, candidate foreign keys, and commit/rollback behavior.
+- Added adversarial GitHub partial-sync coverage. Evaluation's existing benchmark and scenarios continue to distinguish eligibility, current qualification, and growth.
+
+### Milestone 4 verification
+
+- Full Python suite: **56 passed, 1 skipped** (the optional PostgreSQL test skips unless configured).
+- Coverage: **87%** over 2,839 statements under `--cov=brokej_search`; the PostgreSQL test was skipped in the ordinary suite.
+- PostgreSQL 16 integration: **1 passed** using a temporary local container and `BROKEJ_TEST_POSTGRES_URL`; migrations upgraded to head and downgraded to base.
+- Ruff lint passed. Ruff formatting passed for `src` and `tests`; repository-wide `ruff format --check .` still reports a pre-existing unformatted Markdown code block in `docs/technical_design.md`, left unchanged.
+- Mypy passed for all 37 source files.
+- No live provider requests were made. HTTP tests use ASGITransport without lifecycle hooks; the application currently has no auth middleware.
 
 ## Milestone 3 delivered
 
@@ -22,7 +39,7 @@ Date: 2026-11-11
 ### Milestone 3 limitations
 
 - No OAuth/private repository access, stored credentials, live GitHub check, cloning, source execution, or broad downloads.
-- GitHub search is bounded to first pages; API attribution is not proof of authorship of all repository code.
+- GitHub search is bounded to 90 results per query; API attribution is not proof of authorship of all repository code.
 - Claim reconciliation is conservative and phrase-limited; it does not independently verify project scale or authorship.
 - Disabling GitHub stops future sync/evaluation use; deletion/retention controls for prior snapshots are not implemented.
 - Requirement extraction and fit heuristics are conservative. Current hard checks cover explicit graduation years, degree terms, and dated experience. Authorization/location remain unknown absent matching candidate preference data.
@@ -54,7 +71,7 @@ The supplied resume was ingested locally as one immutable version. It produced s
 - `0002`: normalized job locations, skill requirements, and field observations.
 - `0003`: foreign-key enforcement for each candidate's current profile and preference pointers.
 - SQLite foreign keys, WAL, busy timeout, unique constraints, indexes, and lifecycle checks are active.
-- ORM types are PostgreSQL-portable; PostgreSQL behavior remains untested.
+- PostgreSQL 16 migration and transaction behavior is integration-tested through the opt-in test; production workload behavior and other PostgreSQL versions remain unverified.
 
 ## Deferred
 

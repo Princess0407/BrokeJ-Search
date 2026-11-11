@@ -118,3 +118,108 @@ def test_non_retryable_failure_surfaces() -> None:
                 await _pages(GreenhouseConnector(client, "example", "Example"))
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    ("connector_type", "payload"),
+    [
+        (GreenhouseConnector, {"jobs": []}),
+        (LeverConnector, []),
+        (AshbyConnector, {"jobs": []}),
+    ],
+)
+def test_empty_provider_responses_terminate(connector_type, payload) -> None:
+    async def run():
+        async with _client([payload]) as client:
+            pages = await _pages(connector_type(client, "example", "Example"))
+            assert len(pages) == 1
+            assert pages[0].jobs == []
+            assert pages[0].complete is True
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    ("connector_type", "payload"),
+    [
+        (GreenhouseConnector, {"jobs": [None]}),
+        (LeverConnector, [None]),
+        (AshbyConnector, {"jobs": [None]}),
+        (
+            AshbyConnector,
+            {
+                "jobs": [
+                    {
+                        "title": "Engineer",
+                        "jobUrl": "https://jobs.example/1",
+                        "secondaryLocations": "unknown",
+                    }
+                ]
+            },
+        ),
+    ],
+)
+def test_provider_schema_drift_raises_connector_error(connector_type, payload) -> None:
+    async def run():
+        async with _client([payload]) as client:
+            with pytest.raises(ConnectorSchemaError):
+                await _pages(connector_type(client, "example", "Example"))
+
+    asyncio.run(run())
+
+
+def test_provider_retry_after_5xx_429_and_timeout_limits() -> None:
+    calls = 0
+    delays: list[float] = []
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(503, json={}, headers={})
+        if calls == 2:
+            return httpx.Response(429, json={}, headers={"Retry-After": "3"})
+        return httpx.Response(200, json={"jobs": []})
+
+    async def record_delay(delay: float) -> None:
+        delays.append(delay)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            pages = await _pages(
+                GreenhouseConnector(
+                    client,
+                    "example",
+                    "Example",
+                    {"retry_base_seconds": 0.25, "min_request_interval_seconds": 0},
+                    sleep=record_delay,
+                )
+            )
+            assert pages[0].jobs == []
+        timeout_calls = 0
+
+        def timeout_handler(request: httpx.Request) -> httpx.Response:
+            nonlocal timeout_calls
+            timeout_calls += 1
+            raise httpx.ReadTimeout("timed out", request=request)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(timeout_handler)) as client:
+            with pytest.raises(ConnectorError, match="Network request failed"):
+                await _pages(
+                    GreenhouseConnector(
+                        client,
+                        "example",
+                        "Example",
+                        {
+                            "max_attempts": 2,
+                            "retry_base_seconds": 0.25,
+                            "min_request_interval_seconds": 0,
+                        },
+                        sleep=record_delay,
+                    )
+                )
+        assert timeout_calls == 2
+
+    asyncio.run(run())
+    assert delays[:2] == [0.25, 3.0]
+    assert delays[2:] == [0.25]

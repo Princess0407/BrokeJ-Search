@@ -20,7 +20,12 @@ class AshbyConnector(JobConnector):
         )
         if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
             raise ConnectorSchemaError("Ashby response must contain a jobs list")
-        jobs = [self.normalize(item) for item in payload["jobs"] if item.get("isListed", True)]
+        jobs = []
+        for item in payload["jobs"]:
+            if not isinstance(item, dict):
+                raise ConnectorSchemaError("Ashby job must be an object")
+            if item.get("isListed", True):
+                jobs.append(self.normalize(item))
         yield ConnectorPage(
             jobs=jobs,
             checkpoint={"complete": True, "count": len(jobs)},
@@ -35,7 +40,10 @@ class AshbyConnector(JobConnector):
         locations: list[str] = []
         if item.get("location"):
             locations.append(str(item["location"]))
-        for secondary in item.get("secondaryLocations") or []:
+        secondary_locations = item.get("secondaryLocations") or []
+        if not isinstance(secondary_locations, list):
+            raise ConnectorSchemaError("Ashby secondaryLocations must be a list")
+        for secondary in secondary_locations:
             if isinstance(secondary, dict) and secondary.get("location"):
                 locations.append(str(secondary["location"]))
         workplace = str(item.get("workplaceType") or "unknown")

@@ -7,7 +7,7 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-from brokej_search.core.exceptions import ConnectorError, GitHubRateLimitError
+from brokej_search.core.exceptions import ConnectorError, ConnectorSchemaError, GitHubRateLimitError
 from brokej_search.database.models import (
     Candidate,
     ClaimReconciliation,
@@ -52,6 +52,68 @@ def test_profile_lookup_and_repository_pagination() -> None:
 
     asyncio.run(run())
     assert len(requests) == 3
+
+
+def test_contribution_search_paginates_and_rejects_malformed_items() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.params.get("page") == "2":
+            return httpx.Response(200, json={"items": [{"url": "second"}]})
+        return httpx.Response(
+            200,
+            json={"items": [{"url": "first"}]},
+            headers={"link": '<https://api.github.com/search/issues?page=2>; rel="next"'},
+        )
+
+    async def run() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            items = await GitHubClient(http).paginated_search(
+                "/search/issues", params={"q": "author:alice type:pr"}, max_items=10
+            )
+            assert [item["url"] for item in items] == ["first", "second"]
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"items": [1]}))
+        ) as http:
+            with pytest.raises(ConnectorSchemaError, match="search item"):
+                await GitHubClient(http).paginated_search("/search/issues", params={"q": "x"})
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json=[None]))
+        ) as http:
+            with pytest.raises(ConnectorSchemaError, match="list item"):
+                await GitHubClient(http).paginated("/users/alice/repos")
+
+    asyncio.run(run())
+    assert len(requests) == 2
+
+
+def test_github_secondary_rate_limit_retries_and_auth_is_optional() -> None:
+    calls = 0
+    delays: list[float] = []
+    seen_auth: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        seen_auth.append(request.headers.get("authorization"))
+        if calls == 1:
+            return httpx.Response(403, headers={"retry-after": "2"})
+        return httpx.Response(200, json={"ok": True})
+
+    async def record_delay(delay: float) -> None:
+        delays.append(delay)
+
+    async def run() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            payload, _ = await GitHubClient(http, sleep=record_delay).get_json("/users/alice")
+            assert payload == {"ok": True}
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            await GitHubClient(http, token="test-token").get_json("/users/alice")
+
+    asyncio.run(run())
+    assert delays == [2]
+    assert seen_auth == [None, None, "Bearer test-token"]
 
 
 def test_rate_limit_network_retry_and_missing_repository() -> None:
@@ -214,7 +276,12 @@ def test_optional_sync_persists_bounded_public_evidence_and_uses_fresh_cache(run
             return first, second
 
     first, second = asyncio.run(run())
-    assert first == {"status": "synchronized", "repositories": 1, "contributions": 3}
+    assert first == {
+        "status": "synchronized",
+        "repositories": 1,
+        "contributions": 3,
+        "failures": 0,
+    }
     assert second == {"status": "fresh", "repositories": 1, "contributions": 0}
     with runtime.factory() as session:
         assert session.scalar(select(func.count(GitHubRepository.id))) == 1
@@ -222,6 +289,68 @@ def test_optional_sync_persists_bounded_public_evidence_and_uses_fresh_cache(run
         analysis = session.scalar(select(RepositoryAnalysis))
         assert analysis is not None
         assert analysis.signals["fastapi_implementation"] is True
+
+
+def test_sync_keeps_accessible_repositories_when_one_repository_fails(runtime) -> None:
+    with runtime.factory.begin() as session:
+        session.add(Candidate(id="candidate-partial"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/users/alice":
+            return httpx.Response(200, json={"id": 8})
+        if request.url.path == "/users/alice/repos":
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": 1, "full_name": "alice/gone", "private": False},
+                    {
+                        "id": 2,
+                        "full_name": "alice/ok",
+                        "html_url": "https://github.com/alice/ok",
+                        "private": False,
+                        "default_branch": "main",
+                    },
+                ],
+            )
+        if request.url.path == "/repos/alice/gone/languages":
+            return httpx.Response(503, json={"message": "temporarily unavailable"})
+        if request.url.path.endswith("/languages"):
+            return httpx.Response(200, json={"Python": 10})
+        if "/git/trees/" in request.url.path:
+            return httpx.Response(200, json={"tree": []})
+        if request.url.path.endswith("/readme"):
+            return httpx.Response(404)
+        if request.url.path == "/search/issues":
+            return httpx.Response(200, json={"items": []})
+        return httpx.Response(404)
+
+    async def run() -> dict:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            service = GitHubService(runtime.factory, GitHubClient(http, max_attempts=1))
+            service.configure("candidate-partial", "alice", authorized=True)
+            return await service.sync("candidate-partial")
+
+    result = asyncio.run(run())
+    assert result == {
+        "status": "partial",
+        "repositories": 1,
+        "contributions": 0,
+        "failures": 1,
+    }
+    with runtime.factory() as session:
+        profile = session.scalar(
+            select(GitHubProfile).where(GitHubProfile.candidate_id == "candidate-partial")
+        )
+        assert profile is not None
+        assert profile.last_successful_sync_at is None
+        assert (
+            session.scalar(
+                select(func.count(GitHubRepository.id)).where(
+                    GitHubRepository.github_profile_id == profile.id
+                )
+            )
+            == 1
+        )
 
 
 def test_candidate_can_reconcile_and_correct_claim_findings(runtime) -> None:

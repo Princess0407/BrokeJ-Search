@@ -30,6 +30,9 @@ dev = [
   "pytest-cov>=6,<8",
   "ruff>=0.8,<1",
 ]
+postgres-test = [
+    "psycopg[binary]>=3.2,<4",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/brokej_search"]
