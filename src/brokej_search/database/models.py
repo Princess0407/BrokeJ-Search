@@ -484,3 +484,183 @@ class JobLifecycleEvent(Base):
     reason: Mapped[str] = mapped_column(String(100))
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class GitHubProfile(Base):
+    __tablename__ = "github_profiles"
+    __table_args__ = (UniqueConstraint("candidate_id"), UniqueConstraint("username"))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    candidate_id: Mapped[str] = mapped_column(ForeignKey("candidates.id"), index=True)
+    username: Mapped[str] = mapped_column(String(100))
+    profile_url: Mapped[str] = mapped_column(Text)
+    github_user_id: Mapped[int | None] = mapped_column(Integer)
+    analysis_authorized: Mapped[bool] = mapped_column(Boolean, default=False)
+    ownership_status: Mapped[str] = mapped_column(String(32), default="unverified")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    provenance: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    etag: Mapped[str | None] = mapped_column(String(255))
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_successful_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class GitHubRepository(Base):
+    __tablename__ = "github_repositories"
+    __table_args__ = (UniqueConstraint("github_profile_id", "github_repo_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    github_profile_id: Mapped[str] = mapped_column(ForeignKey("github_profiles.id"), index=True)
+    github_repo_id: Mapped[int] = mapped_column(Integer)
+    full_name: Mapped[str] = mapped_column(String(255))
+    html_url: Mapped[str] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    fork: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    default_branch: Mapped[str | None] = mapped_column(String(255))
+    languages: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
+    topics: Mapped[list[str]] = mapped_column(JSON, default=list)
+    repository_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
+    etag: Mapped[str | None] = mapped_column(String(255))
+    repository_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class GitHubContribution(Base):
+    __tablename__ = "github_contributions"
+    __table_args__ = (UniqueConstraint("github_profile_id", "kind", "api_url"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    github_profile_id: Mapped[str] = mapped_column(ForeignKey("github_profiles.id"), index=True)
+    repository_full_name: Mapped[str | None] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(32))
+    api_url: Mapped[str] = mapped_column(Text)
+    html_url: Mapped[str | None] = mapped_column(Text)
+    state: Mapped[str | None] = mapped_column(String(32))
+    attribution_status: Mapped[str] = mapped_column(String(32), default="uncertain")
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    contribution_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
+
+
+class RepositoryAnalysis(Base):
+    __tablename__ = "repository_analyses"
+    __table_args__ = (UniqueConstraint("repository_id", "analysis_version", "source_hash"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    repository_id: Mapped[str] = mapped_column(ForeignKey("github_repositories.id"), index=True)
+    analysis_version: Mapped[str] = mapped_column(String(32))
+    source_hash: Mapped[str] = mapped_column(String(64))
+    purpose: Mapped[str | None] = mapped_column(Text)
+    classification: Mapped[str] = mapped_column(String(40))
+    signals: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    source_urls: Mapped[list[str]] = mapped_column(JSON, default=list)
+    confidence: Mapped[float] = mapped_column(Float)
+    analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ClaimReconciliation(Base):
+    __tablename__ = "claim_reconciliations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    candidate_id: Mapped[str] = mapped_column(ForeignKey("candidates.id"), index=True)
+    profile_version_id: Mapped[str] = mapped_column(ForeignKey("profile_versions.id"), index=True)
+    claim: Mapped[str] = mapped_column(Text)
+    classification: Mapped[str] = mapped_column(String(32))
+    explanation: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    candidate_correction: Mapped[str | None] = mapped_column(String(32))
+    candidate_note: Mapped[str | None] = mapped_column(Text)
+    corrected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class JobRequirement(Base):
+    __tablename__ = "job_requirements"
+    __table_args__ = (UniqueConstraint("job_id", "source_hash", "requirement_key"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id"), index=True)
+    source_hash: Mapped[str] = mapped_column(String(64), index=True)
+    requirement_key: Mapped[str] = mapped_column(String(64))
+    original_text: Mapped[str] = mapped_column(Text)
+    normalized_competency: Mapped[str | None] = mapped_column(String(255))
+    category: Mapped[str] = mapped_column(String(40))
+    criticality: Mapped[str] = mapped_column(String(32))
+    mandatory_status: Mapped[str] = mapped_column(String(20))
+    evidence_expected: Mapped[list[str]] = mapped_column(JSON, default=list)
+    extraction_confidence: Mapped[float] = mapped_column(Float)
+    source_reference: Mapped[str] = mapped_column(String(255))
+    extractor_version: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class QualificationAssessment(Base):
+    __tablename__ = "qualification_assessments"
+    __table_args__ = (
+        UniqueConstraint("candidate_id", "job_id", "profile_version_id", "engine_version"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    candidate_id: Mapped[str] = mapped_column(ForeignKey("candidates.id"), index=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id"), index=True)
+    profile_version_id: Mapped[str] = mapped_column(ForeignKey("profile_versions.id"))
+    preference_version_id: Mapped[str | None] = mapped_column(ForeignKey("preference_versions.id"))
+    engine_version: Mapped[str] = mapped_column(String(32))
+    requirement_source_hash: Mapped[str] = mapped_column(String(64))
+    scores: Mapped[dict[str, Any]] = mapped_column(JSON)
+    eligibility: Mapped[dict[str, Any]] = mapped_column(JSON)
+    missing_requirements: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    unverified_claims: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    contradictions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    result: Mapped[dict[str, Any]] = mapped_column(JSON)
+    confidence: Mapped[float] = mapped_column(Float)
+    assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RequirementEvidenceMatch(Base):
+    __tablename__ = "requirement_evidence_matches"
+    __table_args__ = (UniqueConstraint("assessment_id", "requirement_id", "evidence_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    assessment_id: Mapped[str] = mapped_column(
+        ForeignKey("qualification_assessments.id"), index=True
+    )
+    requirement_id: Mapped[str] = mapped_column(ForeignKey("job_requirements.id"), index=True)
+    evidence_id: Mapped[str] = mapped_column(String(255))
+    source: Mapped[str] = mapped_column(String(40))
+    description: Mapped[str] = mapped_column(Text)
+    related_skill: Mapped[str | None] = mapped_column(String(255))
+    relevant_dates: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    classification: Mapped[str] = mapped_column(String(32))
+    verification_status: Mapped[str] = mapped_column(String(32))
+    retrieval_confidence: Mapped[float] = mapped_column(Float)
+
+
+class GrowthAssessment(Base):
+    __tablename__ = "growth_assessments"
+    assessment_id: Mapped[str] = mapped_column(
+        ForeignKey("qualification_assessments.id"), primary_key=True
+    )
+    score: Mapped[float] = mapped_column(Float)
+    band: Mapped[str] = mapped_column(String(20))
+    foundations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    gaps: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    reasoning: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+class Recommendation(Base):
+    __tablename__ = "recommendations"
+    assessment_id: Mapped[str] = mapped_column(
+        ForeignKey("qualification_assessments.id"), primary_key=True
+    )
+    outcome: Mapped[str] = mapped_column(String(32), index=True)
+    explanation: Mapped[str] = mapped_column(Text)
+    critic_flags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    confidence: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BenchmarkResult(Base):
+    __tablename__ = "benchmark_results"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    benchmark_version: Mapped[str] = mapped_column(String(32), index=True)
+    engine_version: Mapped[str] = mapped_column(String(32))
+    case_count: Mapped[int] = mapped_column(Integer)
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON)
+    limitations: Mapped[list[str]] = mapped_column(JSON, default=list)
+    run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

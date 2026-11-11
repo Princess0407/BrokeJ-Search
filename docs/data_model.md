@@ -1,6 +1,6 @@
 # Data model
 
-Status: logical schema for initial migrations
+Status: logical schema for migrations 0001–0004
 Last reviewed: 2026-11-11
 
 ## Conventions
@@ -301,6 +301,20 @@ Append-only job ID, old/new status, reason code, source appearance/run reference
 
 ## Important invariants
 
+## Milestone 3 evaluation and GitHub
+
+- `github_profiles`: one candidate association with username/URL, user ID, explicit authorization, ownership status, provenance, ETag, and sync timestamps. Tokens are not stored.
+- `github_repositories`: public repository identity, fork/archive status, language sizes, topics, limited metadata, update/check times.
+- `github_contributions`: API references for PRs, issues, and reviews with state, date, repository, and attribution status; this is not authorship of all repository code.
+- `repository_analyses`: versioned source hash, coarse signals/classification, source URLs, confidence, and timestamp. README/source content is not retained.
+- `claim_reconciliations`: claim result, explanation, evidence references, and a separate candidate correction/note by candidate profile version.
+- `job_requirements`: extraction snapshot by job/source hash with source wording/reference, category, criticality, expected evidence, confidence, and extractor version.
+- `qualification_assessments`: unique per candidate/job/profile/engine; stores component scores, eligibility, gap summaries, confidence, and immutable result snapshot.
+- `requirement_evidence_matches`, `growth_assessments`, and `recommendations` retain requirement mappings, separate growth reasoning, and outcome/critic explanation.
+- `benchmark_results` can store benchmark aggregates; the current test runner only uses fixtures and does not persist candidate data.
+
+## Important invariants
+
 1. Current candidate pointers reference versions belonging to that candidate.
 2. A profile version and its entities are immutable after commit.
 3. Candidate-confirmed data is never replaced by resume extraction.
@@ -311,5 +325,8 @@ Append-only job ID, old/new status, reason code, source appearance/run reference
 8. An uncertain duplicate remains two jobs plus a decision record.
 9. Checkpoints never advance beyond committed observations.
 10. Listing status never represents application status.
+11. GitHub analysis stays disabled until candidate authorization; unconfirmed ownership cannot become verified candidate evidence.
+12. Repository popularity does not contribute to qualification.
+13. Unknown hard eligibility remains unknown and cannot be offset by other scores.
 
 SQLite triggers are not used for domain behavior. Services enforce cross-table invariants inside transactions, and integration tests exercise them on the migrated schema.

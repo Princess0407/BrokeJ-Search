@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: implemented; see `implementation_report.md` for verification
+Status: Milestones 1–3 implemented; see `implementation_report.md` for verification
 Last reviewed: 2026-11-11
 
 ## Repository inspection result
@@ -208,3 +208,16 @@ Unknown preferences are created explicitly and validation asks the candidate to 
 ## Completion
 
 Stages 0 through 7 were implemented in one local autonomous run. The resulting modules, migrations, connector status, verification results, and remaining limitations are recorded in `overnight_execution_log.md` and `implementation_report.md`.
+
+## Milestone 3 checkpoint
+
+Milestone 3 added deterministic requirement decomposition, evidence-based evaluation, eligibility/growth separation, a deterministic critic, optional public GitHub analysis, migration `0004`, and a 30-case fixture benchmark. See `decision_log.md` for decisions and `evaluation/` for benchmark method/results.
+
+Recommended continuation: independently review evaluator heuristics and expand independently labeled cases before threshold calibration. Resume with:
+
+```sh
+.venv/bin/alembic upgrade head
+.venv/bin/pytest -q
+.venv/bin/ruff check .
+.venv/bin/mypy src
+```

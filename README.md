@@ -1,6 +1,6 @@
 # BrokeJ-Search
 
-BrokeJ-Search is a local-first backend for an evidence-backed career profile and permitted job discovery. It implements Milestones 1 and 2 as a Python modular monolith. It does not rank jobs, tailor resumes, submit applications, or provide a frontend.
+BrokeJ-Search is a local-first backend for evidence-backed career profiles, permitted job discovery, and explainable job-fit evaluation. It implements Milestones 1–3 as a Python modular monolith. It does not tailor resumes, submit applications, or provide a frontend.
 
 ## Implemented
 
@@ -11,6 +11,10 @@ BrokeJ-Search is a local-first backend for an evidence-backed career profile and
 - Greenhouse, Lever, and Ashby public job-board connectors against documented response formats.
 - Source registry, pagination, checkpoints, durable retries, rate-limit handling, overlap leases, and failure isolation.
 - Common jobs, raw source appearances, field origins, conservative deduplication, and lifecycle events.
+- Deterministic job requirement extraction and separate qualification, eligibility, growth, preference, and evidence-confidence assessments.
+- Optional, candidate-authorized public GitHub evidence with bounded repository inspection and attribution uncertainty.
+- Resume project/work claim reconciliation with candidate correction notes.
+- Deterministic recommendation critic and a curated 30-case regression benchmark.
 - Manual CLI, recurring APScheduler worker, thin FastAPI adapter, reversible migrations, and SQLite backups.
 
 The three connectors are protocol/fixture tested. Ordinary tests never call live providers. LinkedIn, Indeed, Wellfound, YC, and social scraping are not implemented.
@@ -97,7 +101,9 @@ The API is local-only by default because external authentication is not part of 
 uv run brokej serve --host 127.0.0.1 --port 8000
 ```
 
-Routes include health/readiness, profile ingestion/retrieval/completeness/evidence, discovery source/run status, and job list/detail. OpenAPI documentation is available at `/docs`. Do not bind publicly until authentication and transport security are added.
+Routes include health/readiness, profile ingestion/retrieval/completeness/evidence, discovery source/run status, job list/detail, job requirement extraction, candidate/job assessment, GitHub association consent/disable, and claim reconciliation/correction. The service API also exposes GitHub sync for callers that provide an HTTP client. OpenAPI documentation is available at `/docs`. Do not bind publicly until authentication and transport security are added.
+
+An assessment is generated with `POST /candidates/{candidate_id}/jobs/{job_id}/assessment`. GitHub association is candidate opt-in through `PUT /candidates/{candidate_id}/github` with username/profile URL, `authorized`, and optional `ownership_confirmed`; `DELETE` disables it. `POST /candidates/{candidate_id}/github/reconciliations` refreshes findings, and `PATCH /candidates/{candidate_id}/github/reconciliations/{id}` records a candidate correction/note. The flow never requests private repository access.
 
 ## Database operations
 
@@ -121,7 +127,7 @@ uv run ruff format --check .
 uv run mypy src
 ```
 
-Tests use migrated, file-backed temporary SQLite databases and mocked HTTP. They cover PDF parsing, evidence, idempotent versions, preferences, provider fixtures, pagination, retries, malformed payloads, deduplication, provenance, restart checkpoints, lifecycle, migrations, and API boundaries.
+Tests use migrated, file-backed temporary SQLite databases and mocked HTTP. They cover PDF parsing, evidence, idempotent versions, preferences, provider fixtures, pagination, retries, malformed payloads, deduplication, provenance, restart checkpoints, lifecycle, requirements, eligibility, growth, GitHub limits/opt-out, benchmark consistency, migrations, and API boundaries.
 
 ## Troubleshooting
 
@@ -136,6 +142,8 @@ Tests use migrated, file-backed temporary SQLite databases and mocked HTTP. They
 - Parsing is deterministic and conservative for conventional heading/bullet resumes; OCR and arbitrary layouts are deferred.
 - Public ATS endpoints mostly provide full-board snapshots, not true incremental cursors.
 - Current connectors do not guess skills or eligibility requirements from prose.
+- Requirement extraction and scoring are deterministic heuristics. The 30-case benchmark measures consistency with authored expectations, not universal accuracy or confidence calibration.
+- GitHub inspection is public-only, opt-in, bounded, and mocked in tests; no live sync, OAuth, private repository access, or code execution is included.
 - SQLite targets one small worker. PostgreSQL portability is designed but not exercised here.
 - External API authentication, remote encrypted backup transport, and live provider smoke tests are deployment work.
 

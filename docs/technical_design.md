@@ -1,6 +1,6 @@
 # Technical design
 
-Status: proposed implementation design
+Status: implemented design for Milestones 1–3
 Last reviewed: 2026-11-11
 
 ## Architecture
@@ -303,3 +303,17 @@ Tests never call live providers. A separate opt-in smoke command may be added la
 - SQLite supports the expected single-user workload. Repository and migration conventions avoid SQLite-only types so PostgreSQL remains a deployment change, not a domain rewrite.
 - A relational evidence graph is sufficient for current traversal patterns and avoids a graph database.
 - Conservative parsing creates review issues rather than an apparently complete but fabricated profile.
+
+## Milestone 3 evaluation and GitHub implementation
+
+`evaluation.RequirementDecomposer` combines stated required/preferred skills, structured education/experience/graduation fields, work arrangement/location, and requirement-like description sentences. It stores source hashes and deterministic IDs. “Must” on responsibility language remains ambiguous; only explicit eligibility conditions become hard gates. Unmatched text stays unknown.
+
+`EvaluationService` reads the current immutable profile and evidence edges. Exact technology matches can use linked work evidence; a small explicit adjacency map yields transferable evidence without upgrading it to direct. Isolated skills remain unverified. GitHub evidence only counts as direct when analysis is authorized, account ownership is candidate-confirmed, the repository is not a fork, and implementation signals are present. Missing public evidence is not negative evidence.
+
+Hard eligibility is separate from technical fit. Explicit graduation, degree, and dated experience checks can pass or fail; authorization and location remain unknown without matching candidate data. Current fit, growth, confidence, responsibility, interest, and posting freshness are distinct. Growth never satisfies a current requirement. A rule-based critic can demote a shortlist to manual review without adding facts.
+
+GitHub REST uses Link-header pagination, ETags, a 24-hour cache, bounded transient retries, and explicit rate-limit handling. Sync is public-only and candidate-authorized. Inspection is limited to 100 repos, 2,000 tree entries, eight selected files (128 KiB each), language data, and README. Contents are transient; only analysis signals and source URLs persist. No code is executed. Contribution searches request at most 30 results per query.
+
+After a successful authorized sync, profile project/work statements are reconciled against available repository signals. Candidate correction classification and notes are stored separately from the machine result and do not rewrite source evidence.
+
+Migration `0004` adds the evaluation/GitHub records without rewriting applied migrations. The 30-case deterministic benchmark asserts authored recommendation labels; it is not a calibrated accuracy estimate.

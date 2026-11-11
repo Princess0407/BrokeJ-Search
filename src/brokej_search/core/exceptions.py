@@ -14,6 +14,10 @@ class ConnectorSchemaError(ConnectorError):
     code = "connector_schema_error"
 
 
+class GitHubRateLimitError(ConnectorError):
+    code = "github_rate_limit"
+
+
 class SourceBusyError(BrokeJError):
     code = "source_busy"
 

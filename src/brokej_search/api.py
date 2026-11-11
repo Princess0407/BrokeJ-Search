@@ -16,6 +16,17 @@ class IngestRequest(BaseModel):
     resume_path: str
 
 
+class GitHubProfileRequest(BaseModel):
+    username_or_url: str
+    authorized: bool
+    ownership_confirmed: bool = False
+
+
+class ClaimCorrectionRequest(BaseModel):
+    classification: str | None = None
+    note: str = ""
+
+
 def create_app(runtime: Runtime | None = None) -> FastAPI:
     runtime = runtime or create_runtime()
     app = FastAPI(title="BrokeJ-Search API", version="0.1.0")
@@ -86,6 +97,44 @@ def create_app(runtime: Runtime | None = None) -> FastAPI:
     @app.get("/jobs/{job_id}")
     def job(job_id: str) -> dict[str, Any]:
         return runtime.discovery.get_job(job_id)
+
+    @app.get("/jobs/{job_id}/requirements")
+    def requirements(job_id: str) -> list[dict[str, Any]]:
+        return [item.model_dump(mode="json") for item in runtime.evaluation.decompose_job(job_id)]
+
+    @app.post("/candidates/{candidate_id}/jobs/{job_id}/assessment")
+    def assess(candidate_id: str, job_id: str) -> dict[str, Any]:
+        return runtime.evaluation.assess(candidate_id, job_id).model_dump(mode="json")
+
+    @app.put("/candidates/{candidate_id}/github")
+    def configure_github(candidate_id: str, request: GitHubProfileRequest) -> dict[str, Any]:
+        return runtime.github.configure(
+            candidate_id,
+            request.username_or_url,
+            authorized=request.authorized,
+            ownership_confirmed=request.ownership_confirmed,
+        )
+
+    @app.delete("/candidates/{candidate_id}/github", status_code=204)
+    def disable_github(candidate_id: str) -> None:
+        runtime.github.disable(candidate_id)
+
+    @app.post("/candidates/{candidate_id}/github/reconciliations")
+    def reconcile_github_claims(candidate_id: str) -> list[dict[str, Any]]:
+        return runtime.github.reconcile_claims(candidate_id)
+
+    @app.patch("/candidates/{candidate_id}/github/reconciliations/{reconciliation_id}")
+    def correct_github_claim(
+        candidate_id: str,
+        reconciliation_id: str,
+        request: ClaimCorrectionRequest,
+    ) -> dict[str, Any]:
+        return runtime.github.correct_claim(
+            candidate_id,
+            reconciliation_id,
+            classification=request.classification,
+            note=request.note,
+        )
 
     return app
 

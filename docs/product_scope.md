@@ -1,11 +1,11 @@
 # Product scope
 
-Status: implementation baseline for Milestones 1 and 2
+Status: implementation baseline for Milestones 1–3
 Last reviewed: 2026-11-11
 
 ## Purpose
 
-BrokeJ-Search is a resume-first backend that preserves a candidate's career facts and the evidence for them, then collects job listings from permitted sources into a durable, source-traceable store. This phase builds the foundation for later reasoning and application assistance; it does not decide whether a job is a good fit.
+BrokeJ-Search is a resume-first backend that preserves a candidate's career facts and evidence, collects permitted job listings, and evaluates candidate fit using source-traceable evidence for human review. It does not submit applications.
 
 The backend is a modular monolith. Its service layer is the product boundary. A command-line adapter, a scheduled worker, and future HTTP, TUI, and GUI clients must all call the same services rather than reimplement business rules.
 
@@ -34,6 +34,14 @@ Milestone 2 will provide:
 - Listing lifecycle state and events, distinct from future application state.
 - Manual and recurring discovery through the same discovery service.
 - Restart-safe persistence in SQLite, with SQLAlchemy models kept portable to PostgreSQL.
+
+## Milestone 3 outcomes
+
+- Deterministic requirement decomposition with source references and retained uncertainty.
+- Requirement-level mapping to profile and opted-in public GitHub evidence.
+- Separate current qualification, growth potential, hard eligibility, confidence, and career-interest assessments.
+- Explainable recommendations and a deterministic critic that can request manual review.
+- A curated 30-case regression benchmark with documented limitations.
 
 ## Initial candidate facts and trust boundary
 
@@ -103,7 +111,6 @@ Unknown values are stored as unknown, surfaced by validation, and never guessed 
 
 This phase will not implement:
 
-- Job-fit scoring, ranking, recommendations, or candidate-to-job matching.
 - Embeddings, a vector database, or an LLM dependency.
 - Resume tailoring, LaTeX generation, or application question answering.
 - Application submission, application tracking, or application-status fields on job listings.
@@ -118,6 +125,8 @@ This phase will not implement:
 Milestone 1 is accepted when the supplied PDF produces the expected entity categories, every claimed skill has either an evidence edge or a validation issue, the same PDF is a semantic no-op on re-import, confirmed facts survive lower-trust imports, versions can be compared, and all profile tests pass.
 
 Milestone 2 is accepted when the three initial ATS connectors parse realistic saved fixtures, repeated runs update provenance without duplicating jobs, a failed connector does not block the others, retry and restart behavior is deterministic, lifecycle transitions require positive evidence or repeated checks, and all discovery and migration tests pass.
+
+Milestone 3 is implemented when requirement decomposition preserves ambiguity, evidence does not turn mentions into demonstrated skills, eligibility gates independently, growth does not raise current proficiency, recommendations are reproducible and explainable, GitHub is opt-in/public/bounded, and the curated benchmark passes. Benchmark passage does not establish universal accuracy.
 
 ## Decisions that remain intentionally open
 

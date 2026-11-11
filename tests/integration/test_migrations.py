@@ -22,6 +22,10 @@ def test_migration_upgrade_and_downgrade(tmp_path: Path) -> None:
         "evidence_edges",
         "jobs",
         "source_checkpoints",
+        "github_profiles",
+        "job_requirements",
+        "qualification_assessments",
+        "recommendations",
     } <= tables
     candidate_foreign_keys = {
         tuple(value["constrained_columns"])
