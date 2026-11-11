@@ -1,0 +1,16 @@
+{
+  "jobs": [
+    {
+      "id": 101,
+      "internal_job_id": 501,
+      "title": "ML Platform Intern",
+      "updated_at": "2026-11-01T10:00:00Z",
+      "location": {"name": "Remote - India"},
+      "absolute_url": "https://boards.greenhouse.io/example/jobs/101",
+      "content": "&lt;p&gt;Build model serving infrastructure with Python.&lt;/p&gt;",
+      "departments": [{"id": 1, "name": "Engineering"}],
+      "metadata": null
+    }
+  ],
+  "meta": {"total": 1}
+}

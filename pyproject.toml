@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "brokej-search"
+version = "0.1.0"
+description = "Evidence-backed career profile and permitted job discovery backend"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14,<2",
+  "apscheduler>=3.11,<4",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "pypdf>=5.1,<7",
+  "sqlalchemy>=2.0.36,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.scripts]
+brokej = "brokej_search.cli:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.13,<2",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<8",
+  "ruff>=0.8,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/brokej_search"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_unused_ignores = true

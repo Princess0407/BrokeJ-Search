@@ -1,0 +1,24 @@
+[
+  {
+    "id": "lever-1",
+    "text": "Backend Engineer",
+    "hostedUrl": "https://jobs.lever.co/example/lever-1",
+    "applyUrl": "https://jobs.lever.co/example/lever-1/apply",
+    "descriptionPlain": "Build reliable Python APIs and distributed services.",
+    "categories": {
+      "location": "Bengaluru, India",
+      "allLocations": ["Bengaluru, India"],
+      "commitment": "Full-time",
+      "team": "Platform"
+    },
+    "createdAt": 1793527200000
+  },
+  {
+    "id": "lever-2",
+    "text": "Inference Engineer Intern",
+    "hostedUrl": "https://jobs.lever.co/example/lever-2",
+    "applyUrl": "https://jobs.lever.co/example/lever-2/apply",
+    "descriptionPlain": "Optimize inference runtimes.",
+    "categories": {"location": "Remote", "commitment": "Internship"}
+  }
+]
