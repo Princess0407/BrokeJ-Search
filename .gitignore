@@ -1,5 +1,4 @@
-.env
-.venv/
+# Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -7,12 +6,37 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
-data/*
-!data/.gitkeep
-examples/profile.json
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Databases and local application data
 *.db
-*.sqlite*
-/Resume-5.pdf
+*.sqlite
+*.sqlite3
+data/
+backups/
+storage/
+uploads/
+
+# Generated files
 dist/
 build/
-*.egg-info/
+*.log
+.cache/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
