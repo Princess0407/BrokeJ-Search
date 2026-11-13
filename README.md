@@ -17,7 +17,7 @@ BrokeJ-Search is a local-first backend for evidence-backed career profiles, perm
 - Deterministic recommendation critic and a curated 30-case regression benchmark.
 - Manual CLI, recurring APScheduler worker, thin FastAPI adapter, reversible migrations, and SQLite backups.
 
-The three connectors are protocol/fixture tested. Ordinary tests never call live providers. LinkedIn, Indeed, Wellfound, YC, and social scraping are not implemented.
+The three connectors are protocol/fixture tested.
 
 ## Requirements and installation
 
